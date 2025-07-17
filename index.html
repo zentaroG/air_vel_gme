@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Station Simulation Viewer</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f5f5f5;
+      padding: 20px;
+      text-align: center;
+    }
+
+    select, button {
+      margin: 5px;
+      padding: 5px 10px;
+      font-size: 16px;
+    }
+
+    #velocityImage {
+      margin-top: 20px;
+      max-width: 100%;
+      border: 1px solid #ccc;
+      height: 300px;
+      object-fit: contain;
+    }
+
+    model-viewer {
+      display: block;
+      margin: 20px auto;
+      width: 800px;
+      height: 400px;
+      background-color: #eee;
+      border: 1px solid #ccc;
+    }
+
+    canvas {
+      max-width: 800px;
+      margin: 30px auto;
+    }
+
+    #costDisplay {
+      margin-top: 10px;
+      font-weight: bold;
+      color: #333;
+    }
+
+    #videoContainer {
+      max-width: 800px;
+      margin: 0 auto 20px;
+    }
+
+    #legend {
+      max-width: 800px;
+      margin: 10px auto 30px;
+      display: flex;
+      justify-content: center;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 14px;
+    }
+
+    .legend-color {
+      width: 20px;
+      height: 20px;
+      border-radius: 3px;
+      border: 1px solid #333;
+    }
+
+    #loadingOverlay {
+      position: fixed;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      background: rgba(0,0,0,0.6);
+      color: white;
+      font-size: 24px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      z-index: 9999;
+      display: none;
+    }
+  </style>
+</head>
+<body>
+
+  <h2>Station Simulation Viewer</h2>
+
+  <!-- Embedded Local MP4 Video -->
+  <div id="videoContainer">
+    <video width="800" height="450" controls>
+      <source src="videos/your-video.mp4" type="video/mp4">
+      Your browser does not support the video tag.
+    </video>
+  </div>
+
+  <!-- 3D Station Model -->
+  <script type="module" src="https://unpkg.com/@google/model-viewer/dist/model-viewer.min.js"></script>
+  <model-viewer id="stationModel" src="models/1111.glb"
+                alt="3D Station Schematic"
+                auto-rotate
+                camera-controls
+                shadow-intensity="1">
+  </model-viewer>
+
+  <!-- Dropdowns -->
+  <div>
+    <label>DR1: <select id="DR1" onchange="updateCost()"></select></label>
+    <label>DR2: <select id="DR2" onchange="updateCost()"></select></label>
+    <label>CP1: <select id="CP1" onchange="updateCost()"></select></label>
+    <label>CP2: <select id="CP2" onchange="updateCost()"></select></label>
+    <br/>
+    <button onclick="simulate()">Simulate</button>
+  </div>
+
+  <!-- Cost Display -->
+  <div id="costDisplay">Estimated Cost: £0k</div>
+
+  <!-- PNG Result Image -->
+  <img id="velocityImage" src="" alt="Velocity Image" />
+
+  <!-- Bar Chart -->
+  <canvas id="velocityChart" width="800" height="400"></canvas>
+
+  <!-- Legend -->
+  <div id="legend">
+    <div class="legend-item"><div class="legend-color" style="background: rgb(0, 189, 25);"></div> ≤ 5 m/s </div>
+    <div class="legend-item"><div class="legend-color" style="background: rgb(0, 160, 226);"></div> > 5 to ≤ 8 m/s</div>
+    <div class="legend-item"><div class="legend-color" style="background: rgb(255, 211, 41);"></div> > 8 to ≤ 10 m/s</div>
+    <div class="legend-item"><div class="legend-color" style="background: rgb(239, 123, 16);"></div> > 10 to ≤ 12 m/s</div>
+	<div class="legend-item"><div class="legend-color" style="background: rgb(147, 100, 204);"></div> > 12 to ≤ 13.5 m/s</div>
+	<div class="legend-item"><div class="legend-color" style="background: rgb(228, 35, 19);"></div> > 13.5 to ≤ 15 m/s</div>
+	<div class="legend-item"><div class="legend-color" style="background: rgb(161, 165, 167);"></div> > 15 to ≤ 17 m/s</div>
+    <div class="legend-item"><div class="legend-color" style="background: rgb(0, 0, 0);"></div> > 17 m/s</div>
+  </div>
+
+  <!-- Loading Screen -->
+  <div id="loadingOverlay">Simulating... Please wait</div>
+
+  <!-- Chart.js and Annotation Plugin -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation"></script>
+
+  <script>
+    Chart.register(window['chartjs-plugin-annotation']);
+
+    const configOptions = {
+      DR1: [
+        { label: "NONE", cost: 0 },
+        { label: "Area = 3m2", cost: 50 },
+        { label: "Area = 5m2", cost: 100 },
+        { label: "Area = 7m2", cost: 150 },
+        { label: "Area = 9m2", cost: 200 },
+        { label: "Area = 12m2", cost: 250 }
+      ],
+      DR2: [
+        { label: "NONE", cost: 0 },
+        { label: "Area = 3m2", cost: 50 },
+        { label: "Area = 5m2", cost: 100 },
+        { label: "Area = 7m2", cost: 150 },
+        { label: "Area = 9m2", cost: 200 },
+        { label: "Area = 12m2", cost: 250 }
+      ],
+      CP1: [
+        { label: "NONE", cost: 0 },
+        { label: "Area = 3m2", cost: 20 },
+        { label: "Area = 4m2", cost: 40 },
+        { label: "Area = 5m2", cost: 60 },
+        { label: "Area = 6m2", cost: 80 },
+        { label: "Area = 7m2", cost: 100 }
+      ],
+      CP2: [
+        { label: "NONE", cost: 0 },
+        { label: "Area = 3m2", cost: 20 },
+        { label: "Area = 4m2", cost: 40 },
+        { label: "Area = 5m2", cost: 60 },
+        { label: "Area = 6m2", cost: 80 },
+        { label: "Area = 7m2", cost: 100 }
+      ]
+    };
+
+    for (const id in configOptions) {
+      const select = document.getElementById(id);
+      configOptions[id].forEach((opt, index) => {
+        const option = document.createElement('option');
+        option.value = index + 1;
+        option.text = opt.label;
+        select.appendChild(option);
+      });
+    }
+
+    function getCode() {
+      return ['DR1', 'DR2', 'CP1', 'CP2']
+        .map(id => document.getElementById(id).value)
+        .join('');
+    }
+
+    function updateCost() {
+      let cost = 0;
+      for (const id in configOptions) {
+        const select = document.getElementById(id);
+        const selectedIndex = parseInt(select.value) - 1;
+        cost += configOptions[id][selectedIndex].cost;
+      }
+      document.getElementById('costDisplay').innerText = `Estimated Cost: £${cost}k`;
+    }
+
+    function updateModel() {
+      const code = getCode();
+      const modelViewer = document.getElementById('stationModel');
+      modelViewer.src = `models/${code}.glb`;
+    }
+
+    async function simulate() {
+      document.getElementById('loadingOverlay').style.display = 'flex';
+
+      setTimeout(async () => {
+        updateModel();
+
+        const code = getCode();
+        document.getElementById('velocityImage').src = `images/${code}.png`;
+
+        const response = await fetch('data.csv');
+        const text = await response.text();
+        const rows = text.trim().split('\n').slice(1);
+
+        const sections = [];
+        const velocities = [];
+
+        rows.forEach(row => {
+          const [time, section, velocity] = row.split(',');
+          if (time === code) {
+            sections.push(section);
+            velocities.push(parseFloat(velocity));
+          }
+        });
+
+        if (velocities.length === 0) {
+          alert(`No velocity data found for configuration ${code}`);
+          document.getElementById('loadingOverlay').style.display = 'none';
+          return;
+        }
+
+        drawChart(sections, velocities);
+        document.getElementById('loadingOverlay').style.display = 'none';
+      }, 1500);
+    }
+
+    let chart;
+        function drawChart(labels, data) {
+      const ctx = document.getElementById('velocityChart').getContext('2d');
+      if (chart) chart.destroy();
+
+      chart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels,
+          datasets: [{
+            label: 'Velocity (m/s)',
+            data,
+            backgroundColor: data.map(v => {
+			  if (v <= 5) return 'rgb(0, 189, 25)';
+              if (v <= 8) return 'rgb(0, 160, 226)';
+              if (v <= 10) return 'rgb(255, 211, 41)';
+              if (v <= 12) return 'rgb(239, 123, 16)';
+              if (v <= 13.5) return 'rgb(147, 100, 204)';
+			  if (v <= 15) return 'rgb(228, 35, 19)';
+			  if (v <= 17) return 'rgb(161, 165, 167)';
+              return 'rgb(0, 0, 0)';
+            }),
+            borderWidth: 1
+          }]
+        },
+        options: {
+          responsive: true,
+          scales: {
+            y: {
+              beginAtZero: true,
+              title: {
+                display: true,
+                text: 'Velocity (m/s)'
+              },
+              suggestedMax: Math.max(...data, 12) + 1
+            }
+          },
+          plugins: {
+            legend: { display: false },
+            annotation: {
+              annotations: {
+                limit8: {
+                  type: 'line',
+                  yMin: 8,
+                  yMax: 8,
+                  borderColor: 'rgb(255, 215, 0)',
+                  borderWidth: 2,
+                  label: {
+                    enabled: true,
+                    content: 'Limit 8 m/s',
+                    position: 'start',
+                    backgroundColor: 'rgb(255, 215, 0)',
+                    color: 'black'
+                  }
+                },
+                limit10: {
+                  type: 'line',
+                  yMin: 10,
+                  yMax: 10,
+                  borderColor: 'rgb(255, 0, 0)',
+                  borderWidth: 2,
+                  label: {
+                    enabled: true,
+                    content: 'Limit 10 m/s',
+                    position: 'start',
+                    backgroundColor: 'rgb(255, 0, 0)',
+                    color: 'white'
+                  }
+                }
+              }
+            }
+          }
+        }
+      });
+    }
+
+    window.onload = () => {
+      ['DR1', 'DR2', 'CP1', 'CP2'].forEach(id => {
+        document.getElementById(id).value = '1';
+      });
+      updateCost();
+    };
+  </script>
+
+</body>
+</html>
+
+
