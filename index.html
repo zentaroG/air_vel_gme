@@ -18,11 +18,14 @@
     }
 
     #velocityImage {
-      margin-top: 20px;
+      margin-top: 60px;
+      margin-bottom: 30px;
       max-width: 100%;
       border: 1px solid #ccc;
-      height: 300px;
+      height: 450px;
       object-fit: contain;
+      transform: scale(1.2);
+      transform-origin: center center;
     }
 
     model-viewer {
@@ -123,7 +126,7 @@
   <div id="costDisplay">Estimated Cost: £0k</div>
 
   <!-- PNG Result Image -->
-  <img id="velocityImage" src="" alt="Velocity Image" />
+  <img id="velocityImage" src="images/welcome.png" alt="Velocity Image" />
 
   <!-- Bar Chart -->
   <canvas id="velocityChart" width="800" height="400"></canvas>
