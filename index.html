@@ -95,7 +95,7 @@
 
   <h2>Station Simulation Viewer</h2>
 
-  <!-- Embedded Local MP4 Video -->
+  <!-- Embedded Video -->
   <div id="videoContainer">
     <video width="800" height="450" controls>
       <source src="videos/your-video.mp4" type="video/mp4">
@@ -103,7 +103,7 @@
     </video>
   </div>
 
-  <!-- 3D Station Model -->
+  <!-- 3D Model Viewer -->
   <script type="module" src="https://unpkg.com/@google/model-viewer/dist/model-viewer.min.js"></script>
   <model-viewer id="stationModel" src="models/1111.glb"
                 alt="3D Station Schematic"
@@ -125,12 +125,12 @@
   <!-- Cost Display -->
   <div id="costDisplay">Estimated Cost: £0k</div>
 
-  <!-- PNG Result Image -->
+  <!-- Velocity Image -->
   <div style="text-align: center;">
     <img id="velocityImage" src="images/welcome.png" alt="Velocity Image" />
   </div>
 
-  <!-- Bar Chart -->
+  <!-- Chart -->
   <canvas id="velocityChart" width="800" height="400"></canvas>
 
   <!-- Legend -->
@@ -139,16 +139,24 @@
     <div class="legend-item"><div class="legend-color" style="background: rgb(0, 160, 226);"></div> > 5 to ≤ 8 m/s</div>
     <div class="legend-item"><div class="legend-color" style="background: rgb(255, 211, 41);"></div> > 8 to ≤ 10 m/s</div>
     <div class="legend-item"><div class="legend-color" style="background: rgb(239, 123, 16);"></div> > 10 to ≤ 12 m/s</div>
-	<div class="legend-item"><div class="legend-color" style="background: rgb(147, 100, 204);"></div> > 12 to ≤ 13.5 m/s</div>
-	<div class="legend-item"><div class="legend-color" style="background: rgb(228, 35, 19);"></div> > 13.5 to ≤ 15 m/s</div>
-	<div class="legend-item"><div class="legend-color" style="background: rgb(161, 165, 167);"></div> > 15 to ≤ 17 m/s</div>
+    <div class="legend-item"><div class="legend-color" style="background: rgb(147, 100, 204);"></div> > 12 to ≤ 13.5 m/s</div>
+    <div class="legend-item"><div class="legend-color" style="background: rgb(228, 35, 19);"></div> > 13.5 to ≤ 15 m/s</div>
+    <div class="legend-item"><div class="legend-color" style="background: rgb(161, 165, 167);"></div> > 15 to ≤ 17 m/s</div>
     <div class="legend-item"><div class="legend-color" style="background: rgb(0, 0, 0);"></div> > 17 m/s</div>
   </div>
 
-  <!-- Loading Screen -->
-  <div id="loadingOverlay">Simulating... Please wait</div>
+  <!-- Loading Overlay with Progress -->
+  <div id="loadingOverlay">
+    <div style="text-align: center;">
+      <div>Simulating... Please wait</div>
+      <div id="progressBarContainer" style="margin-top: 20px; width: 400px; height: 20px; background: #444; border-radius: 10px; overflow: hidden;">
+        <div id="progressBar" style="width: 0%; height: 100%; background: #4caf50; transition: width 0.2s;"></div>
+      </div>
+      <div id="progressPercent" style="margin-top: 10px;">0%</div>
+    </div>
+  </div>
 
-  <!-- Chart.js and Annotation Plugin -->
+  <!-- Scripts -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation"></script>
 
@@ -223,42 +231,65 @@
     }
 
     async function simulate() {
-      document.getElementById('loadingOverlay').style.display = 'flex';
+      const overlay = document.getElementById('loadingOverlay');
+      const progressBar = document.getElementById('progressBar');
+      const progressPercent = document.getElementById('progressPercent');
+
+      overlay.style.display = 'flex';
+      progressBar.style.width = '0%';
+      progressPercent.innerText = '0%';
+
+      const duration = 20000; // 20 seconds
+      const intervalTime = 100; // every 100ms
+      const steps = duration / intervalTime;
+      let current = 0;
+
+      const interval = setInterval(() => {
+        current++;
+        const percent = Math.min((current / steps) * 100, 100);
+        progressBar.style.width = `${percent.toFixed(0)}%`;
+        progressPercent.innerText = `${percent.toFixed(0)}%`;
+      }, intervalTime);
 
       setTimeout(async () => {
-        updateModel();
+        clearInterval(interval);
 
+        updateModel();
         const code = getCode();
         document.getElementById('velocityImage').src = `images/${code}.png`;
 
-        const response = await fetch('data.csv');
-        const text = await response.text();
-        const rows = text.trim().split('\n').slice(1);
+        try {
+          const response = await fetch('data.csv');
+          if (!response.ok) throw new Error("Failed to load data.csv");
+          const text = await response.text();
+          const rows = text.trim().split('\n').slice(1);
 
-        const sections = [];
-        const velocities = [];
+          const sections = [];
+          const velocities = [];
 
-        rows.forEach(row => {
-          const [time, section, velocity] = row.split(',');
-          if (time === code) {
-            sections.push(section);
-            velocities.push(parseFloat(velocity));
+          rows.forEach(row => {
+            const [time, section, velocity] = row.split(',');
+            if (time === code) {
+              sections.push(section);
+              velocities.push(parseFloat(velocity));
+            }
+          });
+
+          if (velocities.length === 0) {
+            alert(`No velocity data found for configuration ${code}`);
+          } else {
+            drawChart(sections, velocities);
           }
-        });
-
-        if (velocities.length === 0) {
-          alert(`No velocity data found for configuration ${code}`);
-          document.getElementById('loadingOverlay').style.display = 'none';
-          return;
+        } catch (err) {
+          alert("Simulation error: " + err.message);
         }
 
-        drawChart(sections, velocities);
-        document.getElementById('loadingOverlay').style.display = 'none';
-      }, 1500);
+        overlay.style.display = 'none';
+      }, duration);
     }
 
     let chart;
-        function drawChart(labels, data) {
+    function drawChart(labels, data) {
       const ctx = document.getElementById('velocityChart').getContext('2d');
       if (chart) chart.destroy();
 
@@ -270,13 +301,13 @@
             label: 'Velocity (m/s)',
             data,
             backgroundColor: data.map(v => {
-			  if (v <= 5) return 'rgb(0, 189, 25)';
+              if (v <= 5) return 'rgb(0, 189, 25)';
               if (v <= 8) return 'rgb(0, 160, 226)';
               if (v <= 10) return 'rgb(255, 211, 41)';
               if (v <= 12) return 'rgb(239, 123, 16)';
               if (v <= 13.5) return 'rgb(147, 100, 204)';
-			  if (v <= 15) return 'rgb(228, 35, 19)';
-			  if (v <= 17) return 'rgb(161, 165, 167)';
+              if (v <= 15) return 'rgb(228, 35, 19)';
+              if (v <= 17) return 'rgb(161, 165, 167)';
               return 'rgb(0, 0, 0)';
             }),
             borderWidth: 1
@@ -307,7 +338,6 @@
                   label: {
                     enabled: true,
                     content: 'Limit 8 m/s',
-                    position: 'start',
                     backgroundColor: 'rgb(255, 215, 0)',
                     color: 'black'
                   }
@@ -321,7 +351,6 @@
                   label: {
                     enabled: true,
                     content: 'Limit 10 m/s',
-                    position: 'start',
                     backgroundColor: 'rgb(255, 0, 0)',
                     color: 'white'
                   }
@@ -343,5 +372,4 @@
 
 </body>
 </html>
-
 
