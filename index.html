@@ -301,15 +301,17 @@
             label: 'Velocity (m/s)',
             data,
             backgroundColor: data.map(v => {
-              if (v <= 5) return 'rgb(0, 189, 25)';
-              if (v <= 8) return 'rgb(0, 160, 226)';
-              if (v <= 10) return 'rgb(255, 211, 41)';
-              if (v <= 12) return 'rgb(239, 123, 16)';
-              if (v <= 13.5) return 'rgb(147, 100, 204)';
-              if (v <= 15) return 'rgb(228, 35, 19)';
-              if (v <= 17) return 'rgb(161, 165, 167)';
-              return 'rgb(0, 0, 0)';
-            }),
+  const absV = Math.abs(v);
+  if (absV <= 5) return 'rgb(0, 189, 25)';          // Green
+  if (absV <= 8) return 'rgb(0, 160, 226)';         // Blue
+  if (absV <= 10) return 'rgb(255, 211, 41)';       // Yellow
+  if (absV <= 12) return 'rgb(239, 123, 16)';       // Orange
+  if (absV <= 13.5) return 'rgb(147, 100, 204)';    // Purple
+  if (absV <= 15) return 'rgb(228, 35, 19)';        // Red
+  if (absV <= 17) return 'rgb(161, 165, 167)';      // Grey
+  return 'rgb(0, 0, 0)';                            // Black
+}),
+
             borderWidth: 1
           }]
         },
