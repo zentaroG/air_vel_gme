@@ -346,10 +346,10 @@ async function simulate() {
 
   // Phases with weights (sum=1) and durations scaled so total = 20000ms
   const phases = [
-    { title: 'Initialising Simulation', detail: 'Setting up environment', weight: 0.1, duration: 1875 },
-    { title: 'Reading openSES input file', detail: `Loading configuration ${code}`, weight: 0.1, duration: 2500 },
+    { title: 'Initialising Simulation', detail: 'Setting up environment', weight: 0.1, duration: 3000 },
+    { title: 'Reading openSES input file', detail: `Loading configuration ${code}`, weight: 0.1, duration: 3500 },
     { title: 'Simulating', detail: 'Running air velocity preset', weight: 0.6, duration: 15000 },
-    { title: 'Post-processing Results', detail: 'Aggregating output', weight: 0.2, duration: 5000 }
+    { title: 'Post-processing Results', detail: 'Aggregating output', weight: 0.2, duration: 6000 }
   ];
 
   let accumulated = 0;
@@ -449,7 +449,7 @@ async function simulate() {
   setTimeout(() => {
     overlay.style.display = 'none';
     simulateBtn.disabled = false;
-  }, 500);
+  }, 1500);
 }
 
     // Wire up
