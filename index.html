@@ -89,6 +89,14 @@
       z-index: 9999;
       display: none;
     }
+
+    /* Small visual polish for status */
+    #phaseTitle {
+      font-weight: bold;
+    }
+    #phaseDetail {
+      opacity: 0.9;
+    }
   </style>
 </head>
 <body>
@@ -119,7 +127,7 @@
     <label>CP1: <select id="CP1" onchange="updateCost()"></select></label>
     <label>CP2: <select id="CP2" onchange="updateCost()"></select></label>
     <br/>
-    <button onclick="simulate()">Simulate</button>
+    <button id="simulateBtn">Simulate</button>
   </div>
 
   <!-- Cost Display -->
@@ -145,14 +153,16 @@
     <div class="legend-item"><div class="legend-color" style="background: rgb(0, 0, 0);"></div> > 17 m/s</div>
   </div>
 
-  <!-- Loading Overlay with Progress -->
+  <!-- Loading Overlay with Phased Status -->
   <div id="loadingOverlay">
-    <div style="text-align: center;">
-      <div>Simulating... Please wait</div>
-      <div id="progressBarContainer" style="margin-top: 20px; width: 400px; height: 20px; background: #444; border-radius: 10px; overflow: hidden;">
+    <div style="text-align: center; max-width: 500px;">
+      <div id="phaseTitle" style="font-size: 28px; margin-bottom: 8px;">Preparing...</div>
+      <div id="phaseDetail" style="font-size: 16px; margin-bottom: 12px;">Initializing</div>
+      <div id="progressBarContainer" style="margin-top: 10px; width: 100%; height: 20px; background: #444; border-radius: 10px; overflow: hidden;">
         <div id="progressBar" style="width: 0%; height: 100%; background: #4caf50; transition: width 0.2s;"></div>
       </div>
-      <div id="progressPercent" style="margin-top: 10px;">0%</div>
+      <div id="progressPercent" style="margin-top: 10px; font-weight: bold;">0%</div>
+      <div id="subProgress" style="margin-top: 8px; font-size: 14px; opacity: 0.9;">&nbsp;</div>
     </div>
   </div>
 
@@ -198,8 +208,17 @@
       ]
     };
 
+    // cache DOM refs
+    const selects = ['DR1', 'DR2', 'CP1', 'CP2'].reduce((acc, id) => {
+      acc[id] = document.getElementById(id);
+      return acc;
+    }, {});
+    const costDisplay = document.getElementById('costDisplay');
+    const velocityImage = document.getElementById('velocityImage');
+    const simulateBtn = document.getElementById('simulateBtn');
+
     for (const id in configOptions) {
-      const select = document.getElementById(id);
+      const select = selects[id];
       configOptions[id].forEach((opt, index) => {
         const option = document.createElement('option');
         option.value = index + 1;
@@ -210,18 +229,21 @@
 
     function getCode() {
       return ['DR1', 'DR2', 'CP1', 'CP2']
-        .map(id => document.getElementById(id).value)
+        .map(id => selects[id].value)
         .join('');
     }
 
-    function updateCost() {
+    function calculateCost() {
       let cost = 0;
       for (const id in configOptions) {
-        const select = document.getElementById(id);
-        const selectedIndex = parseInt(select.value) - 1;
+        const selectedIndex = parseInt(selects[id].value, 10) - 1;
         cost += configOptions[id][selectedIndex].cost;
       }
-      document.getElementById('costDisplay').innerText = `Estimated Cost: £${cost}k`;
+      return cost;
+    }
+
+    function updateCost() {
+      costDisplay.innerText = `Estimated Cost: £${calculateCost()}k`;
     }
 
     function updateModel() {
@@ -230,65 +252,8 @@
       modelViewer.src = `models/${code}.glb`;
     }
 
-    async function simulate() {
-      const overlay = document.getElementById('loadingOverlay');
-      const progressBar = document.getElementById('progressBar');
-      const progressPercent = document.getElementById('progressPercent');
-
-      overlay.style.display = 'flex';
-      progressBar.style.width = '0%';
-      progressPercent.innerText = '0%';
-
-      const duration = 20000; // 20 seconds
-      const intervalTime = 100; // every 100ms
-      const steps = duration / intervalTime;
-      let current = 0;
-
-      const interval = setInterval(() => {
-        current++;
-        const percent = Math.min((current / steps) * 100, 100);
-        progressBar.style.width = `${percent.toFixed(0)}%`;
-        progressPercent.innerText = `${percent.toFixed(0)}%`;
-      }, intervalTime);
-
-      setTimeout(async () => {
-        clearInterval(interval);
-
-        updateModel();
-        const code = getCode();
-        document.getElementById('velocityImage').src = `images/${code}.png`;
-
-        try {
-          const response = await fetch('data.csv');
-          if (!response.ok) throw new Error("Failed to load data.csv");
-          const text = await response.text();
-          const rows = text.trim().split('\n').slice(1);
-
-          const sections = [];
-          const velocities = [];
-
-          rows.forEach(row => {
-            const [time, section, velocity] = row.split(',');
-            if (time === code) {
-              sections.push(section);
-              velocities.push(parseFloat(velocity));
-            }
-          });
-
-          if (velocities.length === 0) {
-            alert(`No velocity data found for configuration ${code}`);
-          } else {
-            drawChart(sections, velocities);
-          }
-        } catch (err) {
-          alert("Simulation error: " + err.message);
-        }
-
-        overlay.style.display = 'none';
-      }, duration);
-    }
-
     let chart;
+
     function drawChart(labels, data) {
       const ctx = document.getElementById('velocityChart').getContext('2d');
       if (chart) chart.destroy();
@@ -301,17 +266,16 @@
             label: 'Velocity (m/s)',
             data,
             backgroundColor: data.map(v => {
-  const absV = Math.abs(v);
-  if (absV <= 5) return 'rgb(0, 189, 25)';          // Green
-  if (absV <= 8) return 'rgb(0, 160, 226)';         // Blue
-  if (absV <= 10) return 'rgb(255, 211, 41)';       // Yellow
-  if (absV <= 12) return 'rgb(239, 123, 16)';       // Orange
-  if (absV <= 13.5) return 'rgb(147, 100, 204)';    // Purple
-  if (absV <= 15) return 'rgb(228, 35, 19)';        // Red
-  if (absV <= 17) return 'rgb(161, 165, 167)';      // Grey
-  return 'rgb(0, 0, 0)';                            // Black
-}),
-
+              const absV = Math.abs(v);
+              if (absV <= 5) return 'rgb(0, 189, 25)';
+              if (absV <= 8) return 'rgb(0, 160, 226)';
+              if (absV <= 10) return 'rgb(255, 211, 41)';
+              if (absV <= 12) return 'rgb(239, 123, 16)';
+              if (absV <= 13.5) return 'rgb(147, 100, 204)';
+              if (absV <= 15) return 'rgb(228, 35, 19)';
+              if (absV <= 17) return 'rgb(161, 165, 167)';
+              return 'rgb(0, 0, 0)';
+            }),
             borderWidth: 1
           }]
         },
@@ -364,12 +328,138 @@
       });
     }
 
-    window.onload = () => {
+async function simulate() {
+  const overlay = document.getElementById('loadingOverlay');
+  const progressBar = document.getElementById('progressBar');
+  const progressPercent = document.getElementById('progressPercent');
+  const phaseTitle = document.getElementById('phaseTitle');
+  const phaseDetail = document.getElementById('phaseDetail');
+  const subProgress = document.getElementById('subProgress');
+
+  simulateBtn.disabled = true;
+  overlay.style.display = 'flex';
+  progressBar.style.width = '0%';
+  progressPercent.innerText = '0%';
+  subProgress.innerText = '';
+
+  const code = getCode();
+
+  // Phases with weights (sum=1) and durations scaled so total = 20000ms
+  const phases = [
+    { title: 'Initialising Simulation', detail: 'Setting up environment', weight: 0.1, duration: 1875 },
+    { title: 'Reading openSES input file', detail: `Loading configuration ${code}`, weight: 0.1, duration: 2500 },
+    { title: 'Simulating', detail: 'Running air velocity preset', weight: 0.6, duration: 15000 },
+    { title: 'Post-processing Results', detail: 'Aggregating output', weight: 0.2, duration: 5000 }
+  ];
+
+  let accumulated = 0;
+
+  function setGlobalProgress(fraction) {
+    const pct = Math.min(Math.round(fraction * 100), 100);
+    progressBar.style.width = `${(fraction * 100).toFixed(2)}%`;
+
+    progressPercent.innerText = `${Math.min(Math.round(fraction * 100), 100)}%`;
+
+  }
+
+  // Utility to animate a phase with smooth progress; optional per-phase callback for extra UI (like subProgress)
+  function runPhase(phase) {
+    return new Promise(resolve => {
+      const start = performance.now();
+      let dotCounter = 0;
+      let lastDotUpdate = start;
+
+      function step(now) {
+        const elapsed = now - start;
+        const localFrac = Math.min(elapsed / phase.duration, 1);
+        setGlobalProgress(accumulated + localFrac * phase.weight);
+
+        // Update detail text with dots for non-simulating phases
+        if (phase.title !== 'Simulating') {
+          if (now - lastDotUpdate >= 400) {
+            dotCounter = (dotCounter + 1) % 4;
+            phaseDetail.innerText = `${phase.detail} ${'.'.repeat(dotCounter)}`;
+            lastDotUpdate = now;
+          }
+        } else {
+          // Simulating shows its own subprogress
+          subProgress.innerText = `Simulation progress: ${Math.round(localFrac * 100)}%`;
+        }
+
+        if (elapsed < phase.duration) {
+          requestAnimationFrame(step);
+        } else {
+          // End-of-phase cleanup
+          if (phase.title === 'Simulating') {
+            subProgress.innerText = '';
+          } else {
+            phaseDetail.innerText = phase.detail; // remove dots
+          }
+          setGlobalProgress(accumulated + phase.weight); // ensure it snaps exactly to end of phase
+          resolve();
+        }
+      }
+
+      // Set titles/details immediately and begin animation
+      phaseTitle.innerText = phase.title;
+      phaseDetail.innerText = phase.detail;
+      requestAnimationFrame(step);
+    });
+  }
+
+  for (const phase of phases) {
+    await runPhase(phase);
+    accumulated += phase.weight;
+  }
+
+  // Post-phase: update model, image, chart
+  updateModel();
+  velocityImage.src = `images/${code}.png`;
+
+  try {
+    const response = await fetch('data.csv');
+    if (!response.ok) throw new Error("Failed to load data.csv");
+    const text = await response.text();
+    const rows = text.trim().split('\n').slice(1);
+
+    const sections = [];
+    const velocities = [];
+
+    rows.forEach(row => {
+      const [time, section, velocity] = row.split(',');
+      if (time === code) {
+        sections.push(section);
+        velocities.push(parseFloat(velocity));
+      }
+    });
+
+    if (velocities.length === 0) {
+      alert(`No velocity data found for configuration ${code}`);
+    } else {
+      drawChart(sections, velocities);
+    }
+  } catch (err) {
+    alert("Simulation error: " + err.message);
+  }
+
+  phaseTitle.innerText = 'Complete';
+  phaseDetail.innerText = `Configuration ${code} processed`;
+  setGlobalProgress(1);
+  subProgress.innerText = '';
+  setTimeout(() => {
+    overlay.style.display = 'none';
+    simulateBtn.disabled = false;
+  }, 500);
+}
+
+    // Wire up
+    window.addEventListener('DOMContentLoaded', () => {
       ['DR1', 'DR2', 'CP1', 'CP2'].forEach(id => {
-        document.getElementById(id).value = '1';
+        selects[id].value = '1';
       });
       updateCost();
-    };
+      simulateBtn.addEventListener('click', simulate);
+    });
   </script>
 
 </body>
